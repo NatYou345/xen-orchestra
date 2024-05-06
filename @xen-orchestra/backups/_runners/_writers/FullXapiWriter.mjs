@@ -9,6 +9,7 @@ import { Task } from '../../Task.mjs'
 import { AbstractFullWriter } from './_AbstractFullWriter.mjs'
 import { MixinXapiWriter } from './_MixinXapiWriter.mjs'
 import { listReplicatedVms } from './_listReplicatedVms.mjs'
+import { DATETIME, JOB_ID, REPLICATED_TO_SR_UUID, SCHEDULE_ID, VM_UUID } from '../../_otherConfig.mjs'
 
 export class FullXapiWriter extends MixinXapiWriter(AbstractFullWriter) {
   constructor(props) {
@@ -77,13 +78,13 @@ export class FullXapiWriter extends MixinXapiWriter(AbstractFullWriter) {
         )
       ),
       targetVm.update_other_config({
-        'xo:backup:sr': srUuid,
+        [REPLICATED_TO_SR_UUID]: srUuid,
 
         // these entries need to be added in case of offline backup
-        'xo:backup:datetime': formatDateTime(timestamp),
-        'xo:backup:job': job.id,
-        'xo:backup:schedule': scheduleId,
-        'xo:backup:vm': vm.uuid,
+        [DATETIME]: formatDateTime(timestamp),
+        [JOB_ID]: job.id,
+        [SCHEDULE_ID]: scheduleId,
+        [VM_UUID]: vm.uuid,
       }),
     ])
 

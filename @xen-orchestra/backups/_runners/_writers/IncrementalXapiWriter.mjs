@@ -5,20 +5,21 @@ import { formatDateTime } from '@xen-orchestra/xapi'
 
 import { formatFilenameDate } from '../../_filenameDate.mjs'
 import { getOldEntries } from '../../_getOldEntries.mjs'
-import { importIncrementalVm, TAG_BACKUP_SR, TAG_BASE_DELTA, TAG_COPY_SRC } from '../../_incrementalVm.mjs'
+import { importIncrementalVm } from '../../_incrementalVm.mjs'
 import { Task } from '../../Task.mjs'
 
 import { AbstractIncrementalWriter } from './_AbstractIncrementalWriter.mjs'
 import { MixinXapiWriter } from './_MixinXapiWriter.mjs'
 import { listReplicatedVms } from './_listReplicatedVms.mjs'
 import find from 'lodash/find.js'
+import { REPLICATED_TO_SR_UUID, BASE_DELTA, COPY_OF, DATETIME, SCHEDULE_ID, JOB_ID } from '../../_otherConfig.mjs'
 
 export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWriter) {
   async checkBaseVdis(baseUuidToSrcVdi, baseVm) {
     assert.notStrictEqual(baseVm, undefined)
     const sr = this._sr
     const replicatedVm = listReplicatedVms(sr.$xapi, this._job.id, sr.uuid, this._vmUuid).find(
-      vm => vm.other_config[TAG_COPY_SRC] === baseVm.uuid
+      vm => vm.other_config[COPY_OF] === baseVm.uuid
     )
     if (replicatedVm === undefined) {
       return baseUuidToSrcVdi.clear()
@@ -28,7 +29,7 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
     const replicatedVdis = new Set(
       await asyncMap(await replicatedVm.$getDisks(), async vdiRef => {
         const otherConfig = await xapi.getField('VDI', vdiRef, 'other_config')
-        return otherConfig[TAG_COPY_SRC]
+        return otherConfig[COPY_OF]
       })
     )
 
@@ -91,13 +92,15 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
     const sr = this._sr
     const xapi = sr.$xapi
     const vm = backup.vm
-    vm.other_config[TAG_COPY_SRC] = vm.uuid
-    const remoteBaseVmUuid = vm.other_config[TAG_BASE_DELTA]
+    vm.other_config[COPY_OF] = vm.uuid
+    const remoteBaseVmUuid = vm.other_config[BASE_DELTA]
     let baseVm
+    // look for the replica of the VM used as a base in this export
+    // one per SR
     if (remoteBaseVmUuid) {
       baseVm = find(
         xapi.objects.all,
-        obj => (obj = obj.other_config) && obj[TAG_COPY_SRC] === remoteBaseVmUuid && obj[TAG_BACKUP_SR] === sr.$id
+        obj => (obj = obj.other_config) && obj[COPY_OF] === remoteBaseVmUuid && obj[REPLICATED_TO_SR_UUID] === sr.$id
       )
 
       if (!baseVm) {
@@ -112,18 +115,18 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
       }
     })
 
-    vm.other_config[TAG_COPY_SRC] = vm.uuid
+    vm.other_config[COPY_OF] = vm.uuid
     if (!_warmMigration) {
       vm.tags.push('Continuous Replication')
     }
 
     Object.values(backup.vdis).forEach(vdi => {
-      vdi.other_config[TAG_COPY_SRC] = vdi.uuid
+      vdi.other_config[COPY_OF] = vdi.uuid
       vdi.SR = sr.$ref
       // vdi.other_config[TAG_BASE_DELTA] is never defined on a suspend vdi
-      if (vdi.other_config[TAG_BASE_DELTA]) {
-        const remoteBaseVdiUuid = vdi.other_config[TAG_BASE_DELTA]
-        const baseVdi = find(baseVdis, vdi => vdi.other_config[TAG_COPY_SRC] === remoteBaseVdiUuid)
+      if (vdi.other_config[BASE_DELTA]) {
+        const remoteBaseVdiUuid = vdi.other_config[BASE_DELTA]
+        const baseVdi = find(baseVdis, vdi => vdi.other_config[COPY_OF] === remoteBaseVdiUuid)
         if (!baseVdi) {
           throw new Error(`missing base VDI (copy of ${remoteBaseVdiUuid})`)
         }
@@ -165,13 +168,13 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
         )
       ),
       targetVm.update_other_config({
-        [TAG_BACKUP_SR]: srUuid,
+        [REPLICATED_TO_SR_UUID]: srUuid,
 
         // these entries need to be added in case of offline backup
-        'xo:backup:datetime': formatDateTime(timestamp),
-        'xo:backup:job': job.id,
-        'xo:backup:schedule': scheduleId,
-        [TAG_BASE_DELTA]: vm.uuid,
+        [DATETIME]: formatDateTime(timestamp),
+        [JOB_ID]: job.id,
+        [SCHEDULE_ID]: scheduleId,
+        [BASE_DELTA]: vm.uuid,
       }),
     ])
   }

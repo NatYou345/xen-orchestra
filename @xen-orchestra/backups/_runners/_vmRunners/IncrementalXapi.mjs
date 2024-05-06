@@ -15,6 +15,7 @@ import { IncrementalRemoteWriter } from '../_writers/IncrementalRemoteWriter.mjs
 import { IncrementalXapiWriter } from '../_writers/IncrementalXapiWriter.mjs'
 import { Task } from '../../Task.mjs'
 import { watchStreamSize } from '../../_watchStreamSize.mjs'
+import { DELTA_CHAIN_LENGTH, EXPORTED_SUCCESSFULLY } from '../../_otherConfig.mjs'
 
 const { debug } = createLogger('xo:backups:IncrementalXapiVmBackup')
 
@@ -94,14 +95,14 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
 
     if (baseVm !== undefined) {
       await exportedVm.update_other_config(
-        'xo:backup:deltaChainLength',
-        String(+(baseVm.other_config['xo:backup:deltaChainLength'] ?? 0) + 1)
+        DELTA_CHAIN_LENGTH,
+        String(+(baseVm.other_config[DELTA_CHAIN_LENGTH] ?? 0) + 1)
       )
     }
 
     // not the case if offlineBackup
     if (exportedVm.is_a_snapshot) {
-      await exportedVm.update_other_config('xo:backup:exported', 'true')
+      await exportedVm.update_other_config(EXPORTED_SUCCESSFULLY, 'true')
     }
 
     const size = Object.values(sizeContainers).reduce((sum, { size }) => sum + size, 0)
@@ -119,7 +120,7 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
   async _selectBaseVm() {
     const xapi = this._xapi
 
-    let baseVm = findLast(this._jobSnapshots, _ => 'xo:backup:exported' in _.other_config)
+    let baseVm = findLast(this._jobSnapshots, _ => EXPORTED_SUCCESSFULLY in _.other_config)
     if (baseVm === undefined) {
       debug('no base VM found')
       return

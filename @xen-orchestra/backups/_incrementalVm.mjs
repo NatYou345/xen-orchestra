@@ -10,17 +10,7 @@ import { defer } from 'golike-defer'
 import { cancelableMap } from './_cancelableMap.mjs'
 import { Task } from './Task.mjs'
 import pick from 'lodash/pick.js'
-
-// in `other_config` of an incrementally replicated VM, contains the UUID of the source VM
-export const TAG_BASE_DELTA = 'xo:base_delta'
-
-// in `other_config` of an incrementally replicated VM, contains the UUID of the target SR used for replication
-//
-// added after the complete replication
-export const TAG_BACKUP_SR = 'xo:backup:sr'
-
-// in other_config of VDIs of an incrementally replicated VM, contains the UUID of the source VDI
-export const TAG_COPY_SRC = 'xo:copy_of'
+import { BASE_DELTA, COPY_OF } from './_otherConfig.mjs'
 
 const ensureArray = value => (value === undefined ? [] : Array.isArray(value) ? value : [value])
 
@@ -73,7 +63,7 @@ export async function exportIncrementalVm(
       ...vdi,
       other_config: {
         ...vdi.other_config,
-        [TAG_BASE_DELTA]: baseVdi && !disableBaseTags ? baseVdi.uuid : undefined,
+        [BASE_DELTA]: baseVdi && !disableBaseTags ? baseVdi.uuid : undefined,
       },
       $snapshot_of$uuid: vdi.$snapshot_of?.uuid,
       $SR$uuid: vdi.$SR.uuid,
@@ -124,9 +114,9 @@ export async function exportIncrementalVm(
           baseVm && !disableBaseTags
             ? {
                 ...vm.other_config,
-                [TAG_BASE_DELTA]: baseVm.uuid,
+                [BASE_DELTA]: baseVm.uuid,
               }
-            : omit(vm.other_config, TAG_BASE_DELTA),
+            : omit(vm.other_config, BASE_DELTA),
       },
     },
     'streams',
@@ -205,7 +195,7 @@ export const importIncrementalVm = defer(async function importIncrementalVm(
       newVdi = await xapi.getRecord('VDI', await vdi.baseVdi.$clone())
       $defer.onFailure(() => newVdi.$destroy())
 
-      await newVdi.update_other_config(TAG_COPY_SRC, vdi.uuid)
+      await newVdi.update_other_config(COPY_OF, vdi.uuid)
       if (vdi.virtual_size > newVdi.virtual_size) {
         await newVdi.$callAsync('resize', vdi.virtual_size)
       }

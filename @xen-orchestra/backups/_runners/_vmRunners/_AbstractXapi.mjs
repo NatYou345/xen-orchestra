@@ -9,6 +9,14 @@ import { formatDateTime } from '@xen-orchestra/xapi'
 import { getOldEntries } from '../../_getOldEntries.mjs'
 import { Task } from '../../Task.mjs'
 import { Abstract } from './_Abstract.mjs'
+import {
+  DATETIME,
+  DELTA_CHAIN_LENGTH,
+  EXPORTED_SUCCESSFULLY,
+  JOB_ID,
+  SCHEDULE_ID,
+  VM_UUID,
+} from '../../_otherConfig.mjs'
 
 export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
   constructor({
@@ -25,7 +33,7 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
     vm,
   }) {
     super()
-    if (vm.other_config['xo:backup:job'] === job.id && 'start' in vm.blocked_operations) {
+    if (vm.other_config[JOB_ID] === job.id && 'start' in vm.blocked_operations) {
       // don't match replicated VMs created by this very job otherwise they
       // will be replicated again and again
       throw new Error('cannot backup a VM created by this very job')
@@ -123,14 +131,14 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
   // copied on manual snapshots and interfere with the backup jobs
   async _cleanMetadata() {
     const vm = this._vm
-    if ('xo:backup:job' in vm.other_config) {
+    if (JOB_ID in vm.other_config) {
       await vm.update_other_config({
-        'xo:backup:datetime': null,
-        'xo:backup:deltaChainLength': null,
-        'xo:backup:exported': null,
-        'xo:backup:job': null,
-        'xo:backup:schedule': null,
-        'xo:backup:vm': null,
+        [DATETIME]: null,
+        [DELTA_CHAIN_LENGTH]: null,
+        [EXPORTED_SUCCESSFULLY]: null,
+        [JOB_ID]: null,
+        [SCHEDULE_ID]: null,
+        [VM_UUID]: null,
       })
     }
   }
@@ -155,10 +163,10 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
         this.timestamp = Date.now()
 
         await xapi.setFieldEntries('VM', snapshotRef, 'other_config', {
-          'xo:backup:datetime': formatDateTime(this.timestamp),
-          'xo:backup:job': this._jobId,
-          'xo:backup:schedule': this.scheduleId,
-          'xo:backup:vm': vm.uuid,
+          [DATETIME]: formatDateTime(this.timestamp),
+          [JOB_ID]: this._jobId,
+          [SCHEDULE_ID]: this.scheduleId,
+          [VM_UUID]: vm.uuid,
         })
 
         this._exportedVm = await xapi.getRecord('VM', snapshotRef)
@@ -181,11 +189,11 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
 
     const snapshots = []
     snapshotsOtherConfig.forEach((other_config, i) => {
-      if (other_config['xo:backup:job'] === jobId) {
+      if (other_config[JOB_ID] === jobId) {
         snapshots.push({ other_config, $ref: snapshotsRef[i] })
       }
     })
-    snapshots.sort((a, b) => (a.other_config['xo:backup:datetime'] < b.other_config['xo:backup:datetime'] ? -1 : 1))
+    snapshots.sort((a, b) => (a.other_config[DATETIME] < b.other_config[DATETIME] ? -1 : 1))
     this._jobSnapshots = snapshots
   }
 
@@ -194,7 +202,7 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
     const baseSettings = this._baseSettings
     const baseVmRef = this._baseVm?.$ref
 
-    const snapshotsPerSchedule = groupBy(this._jobSnapshots, _ => _.other_config['xo:backup:schedule'])
+    const snapshotsPerSchedule = groupBy(this._jobSnapshots, _ => _.other_config[SCHEDULE_ID])
     const xapi = this._xapi
     await asyncMap(Object.entries(snapshotsPerSchedule), ([scheduleId, snapshots]) => {
       const settings = {
