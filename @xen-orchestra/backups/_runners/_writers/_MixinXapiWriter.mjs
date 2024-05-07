@@ -13,9 +13,9 @@ export const MixinXapiWriter = (BaseClass = Object) =>
     }
 
     // check if the base Vm has all its disk on health check sr
-    async #isAlreadyOnHealthCheckSr(baseVm) {
-      const xapi = baseVm.$xapi
-      const vdiRefs = await xapi.VM_getDisks(baseVm.$ref)
+    async #isAlreadyOnHealthCheckSr(replicatedVm) {
+      const xapi = replicatedVm.$xapi
+      const vdiRefs = await xapi.VM_getDisks(replicatedVm.$ref)
       for (const vdiRef of vdiRefs) {
         const vdi = xapi.getObject(vdiRef)
         if (vdi.$SR.uuid !== this._healthCheckSr.uuid) {
@@ -39,13 +39,13 @@ export const MixinXapiWriter = (BaseClass = Object) =>
           const { $xapi: xapi } = sr
           let healthCheckVmRef
           try {
-            let baseVm
+            let replicatedVm
             try {
-              baseVm = xapi.getObject(this._targetVmRef)
+              replicatedVm = xapi.getObject(this._targetVmRef)
             } catch (err) {
-              baseVm = await xapi.waitObject(this._targetVmRef)
+              replicatedVm = await xapi.waitObject(this._targetVmRef)
             }
-            if (await this.#isAlreadyOnHealthCheckSr(baseVm)) {
+            if (await this.#isAlreadyOnHealthCheckSr(replicatedVm)) {
               healthCheckVmRef = await Task.run(
                 { name: 'cloning-vm' },
                 async () => await xapi.callAsync('VM.clone', this._targetVmRef, `Health Check - ${baseVm.name_label}`)

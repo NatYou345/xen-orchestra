@@ -1,4 +1,3 @@
-import assert from 'node:assert'
 import { asyncMap, asyncMapSettled } from '@xen-orchestra/async-map'
 import ignoreErrors from 'promise-toolbox/ignoreErrors'
 import { formatDateTime } from '@xen-orchestra/xapi'
@@ -12,29 +11,24 @@ import { AbstractIncrementalWriter } from './_AbstractIncrementalWriter.mjs'
 import { MixinXapiWriter } from './_MixinXapiWriter.mjs'
 import { listReplicatedVms } from './_listReplicatedVms.mjs'
 import find from 'lodash/find.js'
-import { REPLICATED_TO_SR_UUID, BASE_DELTA, COPY_OF, DATETIME, SCHEDULE_ID, JOB_ID } from '../../_otherConfig.mjs'
+import { REPLICATED_TO_SR_UUID, BASE_DELTA_VM, COPY_OF, DATETIME, SCHEDULE_ID, JOB_ID } from '../../_otherConfig.mjs'
 
 export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWriter) {
-  async checkBaseVdis(baseUuidToSrcVdi, baseVm) {
-    assert.notStrictEqual(baseVm, undefined)
+  async checkBaseVdis(baseUuidToSrcVdi) {
     const sr = this._sr
-    const replicatedVm = listReplicatedVms(sr.$xapi, this._job.id, sr.uuid, this._vmUuid).find(
-      vm => vm.other_config[COPY_OF] === baseVm.uuid
-    )
-    if (replicatedVm === undefined) {
-      return baseUuidToSrcVdi.clear()
-    }
-
-    const xapi = replicatedVm.$xapi
-    const replicatedVdis = new Set(
-      await asyncMap(await replicatedVm.$getDisks(), async vdiRef => {
-        const otherConfig = await xapi.getField('VDI', vdiRef, 'other_config')
-        return otherConfig[COPY_OF]
-      })
+    const xapi = sr.$xapi
+    const baseUuids = baseUuidToSrcVdi.keys()
+    // @todo use an index if possible
+    // @todo : this seems similare to decorateVmMetadata
+    const replicatedVdis = Object.values(xapi.objects).filter(
+      object =>
+        object.type === 'VDI' &&
+        baseUuids.includes(object.other_config[COPY_OF]) &&
+        object.other_config[REPLICATED_TO_SR_UUID] === sr.uuid
     )
 
     for (const uuid of baseUuidToSrcVdi.keys()) {
-      if (!replicatedVdis.has(uuid)) {
+      if (!replicatedVdis.includes(uuid)) {
         baseUuidToSrcVdi.delete(uuid)
       }
     }
@@ -93,7 +87,7 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
     const xapi = sr.$xapi
     const vm = backup.vm
     vm.other_config[COPY_OF] = vm.uuid
-    const remoteBaseVmUuid = vm.other_config[BASE_DELTA]
+    const remoteBaseVmUuid = vm.other_config[BASE_DELTA_VM]
     let baseVm
     // look for the replica of the VM used as a base in this export
     // one per SR
@@ -124,8 +118,8 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
       vdi.other_config[COPY_OF] = vdi.uuid
       vdi.SR = sr.$ref
       // vdi.other_config[TAG_BASE_DELTA] is never defined on a suspend vdi
-      if (vdi.other_config[BASE_DELTA]) {
-        const remoteBaseVdiUuid = vdi.other_config[BASE_DELTA]
+      if (vdi.other_config[BASE_DELTA_VM]) {
+        const remoteBaseVdiUuid = vdi.other_config[BASE_DELTA_VM]
         const baseVdi = find(baseVdis, vdi => vdi.other_config[COPY_OF] === remoteBaseVdiUuid)
         if (!baseVdi) {
           throw new Error(`missing base VDI (copy of ${remoteBaseVdiUuid})`)
@@ -174,7 +168,7 @@ export class IncrementalXapiWriter extends MixinXapiWriter(AbstractIncrementalWr
         [DATETIME]: formatDateTime(timestamp),
         [JOB_ID]: job.id,
         [SCHEDULE_ID]: scheduleId,
-        [BASE_DELTA]: vm.uuid,
+        [BASE_DELTA_VM]: vm.uuid,
       }),
     ])
   }

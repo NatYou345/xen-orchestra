@@ -1,6 +1,5 @@
 import groupBy from 'lodash/groupBy.js'
 import ignoreErrors from 'promise-toolbox/ignoreErrors'
-import omit from 'lodash/omit.js'
 import { asyncMap } from '@xen-orchestra/async-map'
 import { CancelToken } from 'promise-toolbox'
 import { compareVersions } from 'compare-versions'
@@ -10,33 +9,16 @@ import { defer } from 'golike-defer'
 import { cancelableMap } from './_cancelableMap.mjs'
 import { Task } from './Task.mjs'
 import pick from 'lodash/pick.js'
-import { BASE_DELTA, COPY_OF } from './_otherConfig.mjs'
+import { BASE_DELTA_VDI, COPY_OF, VM_UUID } from './_otherConfig.mjs'
 
 const ensureArray = value => (value === undefined ? [] : Array.isArray(value) ? value : [value])
 
 export async function exportIncrementalVm(
   vm,
-  baseVm,
-  {
-    cancelToken = CancelToken.none,
-
-    // Sets of UUIDs of VDIs that must be exported as full.
-    fullVdisRequired = new Set(),
-
-    disableBaseTags = false,
-    nbdConcurrency = 1,
-    preferNbd,
-  } = {}
+  baseVdis = {},
+  { cancelToken = CancelToken.none, nbdConcurrency = 1, preferNbd } = {}
 ) {
   // refs of VM's VDIs → base's VDIs.
-  const baseVdis = {}
-  baseVm &&
-    baseVm.$VBDs.forEach(vbd => {
-      let vdi, snapshotOf
-      if ((vdi = vbd.$VDI) && (snapshotOf = vdi.$snapshot_of) && !fullVdisRequired.has(snapshotOf.uuid)) {
-        baseVdis[vdi.snapshot_of] = vdi
-      }
-    })
 
   const streams = {}
   const vdis = {}
@@ -58,12 +40,14 @@ export async function exportIncrementalVm(
 
     // Look for a snapshot of this vdi in the base VM.
     const baseVdi = baseVdis[vdi.snapshot_of]
-
     vdis[vdiRef] = {
       ...vdi,
       other_config: {
         ...vdi.other_config,
-        [BASE_DELTA]: baseVdi && !disableBaseTags ? baseVdi.uuid : undefined,
+        [BASE_DELTA_VDI]: baseVdi ? baseVdi.uuid : undefined,
+        [VM_UUID]:
+          vm.$snapshot_of?.uuid ?? // vm is a snapshot
+          vm.uuid, // vm is a not snapshot
       },
       $snapshot_of$uuid: vdi.$snapshot_of?.uuid,
       $SR$uuid: vdi.$SR.uuid,
@@ -110,13 +94,6 @@ export async function exportIncrementalVm(
       vifs,
       vm: {
         ...vm,
-        other_config:
-          baseVm && !disableBaseTags
-            ? {
-                ...vm.other_config,
-                [BASE_DELTA]: baseVm.uuid,
-              }
-            : omit(vm.other_config, BASE_DELTA),
       },
     },
     'streams',
