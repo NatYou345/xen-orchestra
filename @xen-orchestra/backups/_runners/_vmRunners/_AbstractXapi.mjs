@@ -194,7 +194,8 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
     }
 
     if (this._jobSnapshotVdis.length === 0) {
-      // @todo fallback to previous method, by vm 20240501
+      console.log('no vdi snapshot for this job')
+      // @todo fallback to previous method, by vm 
       // to ensure compatilibity with existing snapshot
     }
   }
@@ -211,8 +212,8 @@ export const AbstractXapi = class AbstractXapiVmBackupRunner extends Abstract {
         ...allSettings[scheduleId],
         ...allSettings[this._vm.uuid],
       }
-      const retention = Math.max(settings.snapshotRetention, 1)
       // ensure we never delete the last one
+      const retention = Math.max(settings.snapshotRetention ?? 0, 1)
       snapshots.sort((a, b) => (a.other_config[DATETIME] < b.other_config[DATETIME] ? -1 : 1))
       // @todo : filter exported=false snapshot
       return asyncMap(getOldEntries(retention, snapshots), ({ $ref }) => {

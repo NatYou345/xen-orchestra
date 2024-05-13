@@ -44,7 +44,7 @@ export async function exportIncrementalVm(
       ...vdi,
       other_config: {
         ...vdi.other_config,
-        [BASE_DELTA_VDI]: baseVdi ? baseVdi.uuid : undefined,
+        [BASE_DELTA_VDI]: baseVdi?.uuid,
         [VM_UUID]:
           vm.$snapshot_of?.uuid ?? // vm is a snapshot
           vm.uuid, // vm is a not snapshot

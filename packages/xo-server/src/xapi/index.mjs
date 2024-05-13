@@ -1036,6 +1036,8 @@ export default class Xapi extends XapiBase {
       if (code !== 'NO_HOSTS_AVAILABLE' && code !== 'LICENCE_RESTRICTION' && code !== 'VDI_NEEDS_VM_FOR_MIGRATE') {
         throw error
       }
+      // @todo : if VM has CBT : disable CBT, retry migration , enable CBT
+      
       const newVdi = await this.barrier(await this.callAsync('VDI.copy', vdi.$ref, sr.$ref))
       await asyncMapSettled(vdi.$VBDs, async vbd => {
         await this.call('VBD.destroy', vbd.$ref)

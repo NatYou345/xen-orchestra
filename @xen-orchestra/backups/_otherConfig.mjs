@@ -31,29 +31,43 @@ async function listVdiRefs(xapi, vmRef) {
   return xapi.VM_getDisks(vmRef)
 }
 
-export async function incrementVmDeltaChainLength(xapi, ref) {
-  // @todo : apply this to the VDI
-  const length = await getDeltaVmChainLength(xapi, ref)
-  await xapi.setFieldEntry('VM', ref, 'other_config', DELTA_CHAIN_LENGTH, String(length + 1))
+async function applyToVmAndVdis(xapi, vmRef, cb){
+  const vdiRefs = await listVdiRefs(xapi, vmRef)
+  return Promise.all([
+    cb('VM', vmRef),
+    ...vdiRefs.map(vdiRef => cb('VDI', vdiRef))
+  ])
+  
 }
 
-export async function getDeltaVmChainLength(xapi, ref) {
-  // @todo get the longest chain of a VDI
-  const otherConfig = await xapi.getField('VM', ref, 'other_config')
-  return otherConfig[DELTA_CHAIN_LENGTH] ?? '0'
+async function getDeltaChainLength(xapi, type, ref){
+  const otherConfig = await xapi.getField(type, ref, 'other_config')  
+    return Number(otherConfig[DELTA_CHAIN_LENGTH] ?? 0)
+}
+export async function setVmDeltaChainLength(xapi, vmRef, length) {
+  return applyToVmAndVdis(xapi, vmRef, async (type, ref)=> {
+    await xapi.setFieldEntry(type, ref, 'other_config', DELTA_CHAIN_LENGTH, String(length))
+  })
 }
 
-export async function resetVmOtherConfig(xapi, vmRef) {
-  // @todo apply this to all vdis
-  await xapi.setFieldEntries('VM', vmRef, {
+export async function getVmDeltaChainLength(xapi,vmRef){
+  const lengths = await applyToVmAndVdis(xapi,vmRef,async (type, ref)=> getDeltaChainLength(xapi, type, ref) )
+  return Math.max(...lengths)
+}
+
+export function resetVmOtherConfig(xapi, vmRef) {
+  return applyToVmAndVdis(xapi, vmRef, (type, ref)=> {
+    return xapi.setFieldEntries(type, ref, 'other_config', {
     [DATETIME]: null,
     [DELTA_CHAIN_LENGTH]: null,
     [EXPORTED_SUCCESSFULLY]: null,
     [JOB_ID]: null,
     [SCHEDULE_ID]: null,
     [VM_UUID]: null,
-    // REPLICATED_TO_SR_UUID is not reste since we can replicate a replication
+    // REPLICATED_TO_SR_UUID is not reset since we can replicate a replication
   })
+})
+  
 }
 
 export async function setVmOtherConfig(xapi, vmRef, { timestamp, jobId, scheduleId, vmUuid, srUuid = null, ...other }) {
@@ -63,31 +77,17 @@ export async function setVmOtherConfig(xapi, vmRef, { timestamp, jobId, schedule
   assert.notEqual(vmUuid, undefined)
   // srUuid is nullish for backup
   assert.equal(Object.keys(other).length, 0)
-  const vdiRefs = await listVdiRefs(xapi, vmRef)
-  await Promise.all([
-    xapi.setFieldEntries('VM', vmRef, 'other_config', {
-      [REPLICATED_TO_SR_UUID]: srUuid,
-      [DATETIME]: formatDateTime(timestamp),
-      [JOB_ID]: jobId,
-      [SCHEDULE_ID]: scheduleId,
-      [VM_UUID]: vmUuid,
-    }),
-    ...vdiRefs.map(vdiRef =>
-      xapi.setFieldEntries('VDI', vdiRef, 'other_config', {
-        [REPLICATED_TO_SR_UUID]: srUuid,
-        [DATETIME]: formatDateTime(timestamp),
-        [JOB_ID]: jobId,
-        [SCHEDULE_ID]: scheduleId,
-        [VM_UUID]: vmUuid,
-      })
-    ),
-  ])
+  
+  return applyToVmAndVdis(xapi, vmRef, (type, ref)=> xapi.setFieldEntries(type, ref, 'other_config', {
+    [REPLICATED_TO_SR_UUID]: srUuid,
+    [DATETIME]: formatDateTime(timestamp),
+    [JOB_ID]: jobId,
+    [SCHEDULE_ID]: scheduleId,
+    [VM_UUID]: vmUuid,
+  }))
+
 }
 export async function markExportSuccessfull(xapi, vmRef) {
-  // @todo apply this to all vdis
-  const vdiRefs = await listVdiRefs(xapi, vmRef)
-  await Promise.all([
-    xapi.setFieldEntry('VM', vmRef, 'other_config', EXPORTED_SUCCESSFULLY, 'true'),
-    ...vdiRefs.map(vdiRef => xapi.setFieldEntry('VDI', vdiRef, 'other_config', EXPORTED_SUCCESSFULLY, 'true')),
-  ])
+  return applyToVmAndVdis(xapi, vmRef,  (type, ref)=>  xapi.setFieldEntry(type, ref, 'other_config', EXPORTED_SUCCESSFULLY, 'true'),
+  )
 }

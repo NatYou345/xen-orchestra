@@ -17,7 +17,7 @@ import {
   DATETIME,
   DELTA_CHAIN_LENGTH,
   EXPORTED_SUCCESSFULLY,
-  incrementVmDeltaChainLength,
+  setVmDeltaChainLength,
   markExportSuccessfull,
 } from '../../_otherConfig.mjs'
 
@@ -39,8 +39,7 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
     const vm = this._vm
     const exportedVm = this._exportedVm
 
-    const isFull = Object.values(baseVdis).some(_ => !_)
-
+    const isFull = Object.values(baseVdis).length === 0 || Object.values(baseVdis).some(_ => !_)
     await this._callWriters(writer => writer.prepare({ isFull }), 'writer.prepare()')
 
     const deltaExport = await exportIncrementalVm(exportedVm, baseVdis, {
@@ -94,8 +93,8 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
     )
 
     if (!isFull) {
-      await incrementVmDeltaChainLength(this._xapi, exportedVm.$ref)
-    }
+      await setVmDeltaChainLength(this._xapi, exportedVm.$ref, (this._deltaChainLength ??0)+1 )
+    } // on a full the delta chain will be null
 
     // not the case if offlineBackup
     if (exportedVm.is_a_snapshot) {
@@ -128,7 +127,7 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
     let lastExportedVdis = []
     for (const exportedVdi of exportedVdis) {
       if (lastSuccessFullBackup === undefined || lastSuccessFullBackup < exportedVdi.other_config[DATETIME]) {
-        lastExportedVdis = [exportedVdi]
+        lastExportedVdis = []
         lastSuccessFullBackup = exportedVdi.other_config[DATETIME]
       }
       if (lastSuccessFullBackup === exportedVdi.other_config[DATETIME]) {
@@ -136,17 +135,21 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
       }
     }
 
-    this._baseVdis = {}
+    this._baseVdis = {} 
     if (lastExportedVdis.length === 0) {
-      debug('no base VDIS found', this._jobSnapshotVdis.length)
+      debug('no base VDIS found', {
+        jobLength:this._jobSnapshotVdis.length,
+        lastSuccessFullBackup, 
+        exportedLength: exportedVdis.length
+    })
       return
     }
     const deltaChainLength = Math.max(
-      lastExportedVdis.map(({ other_config }) => Number(other_config[DELTA_CHAIN_LENGTH] ?? 0))
+      ...lastExportedVdis.map(({ other_config }) => Number(other_config[DELTA_CHAIN_LENGTH] ?? 0))
     )
     const fullInterval = this._settings.fullInterval
     if (!(fullInterval === 0 || fullInterval > deltaChainLength + 1)) {
-      debug('not using base VM because fullInterval reached')
+      debug('not using base VM because fullInterval reached', {fullInterval,deltaChainLength})
       return
     }
 
@@ -183,7 +186,7 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
           base: baseUuid,
           vdi: srcVdiUuid,
         })
-        this._baseVdis[srcVdiUuid] = lastExportedVdis.find(vdi => vdi.snapshotOf === srcVdiUuid)
+        this._baseVdis[srcVdiUuid] = lastExportedVdis.find(vdi => vdi.uuid === baseUuid)
       } else {
         debug('missing base VDI', {
           base: baseUuid,
@@ -193,5 +196,6 @@ export const IncrementalXapi = class IncrementalXapiVmBackupRunner extends Abstr
         this._baseVdis[srcVdiUuid] = undefined
       }
     })
+    this._deltaChainLength = deltaChainLength
   }
 }
