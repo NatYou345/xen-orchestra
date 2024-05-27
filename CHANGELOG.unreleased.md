@@ -27,4 +27,6 @@
 
 <!--packages-start-->
 
+- xo-server-backup-reports major
+
 <!--packages-end-->
