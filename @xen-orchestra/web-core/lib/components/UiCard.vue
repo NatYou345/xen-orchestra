@@ -19,7 +19,6 @@ defineProps<Props>()
   border-radius: 0.8rem;
   box-shadow: var(--shadow-200);
   background-color: var(--background-color-primary);
-  border: 1px solid var(--color-grey-500);
   gap: 2.4rem;
   width: 100%;
   height: 100%;
