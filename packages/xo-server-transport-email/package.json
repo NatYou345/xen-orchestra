@@ -28,7 +28,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "marked": "^11.1.0",
+    "marked": "^4.0.10",
     "nodemailer": "^6.1.0",
     "promise-toolbox": "^0.21.0"
   },
