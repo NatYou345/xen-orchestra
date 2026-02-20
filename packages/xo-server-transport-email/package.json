@@ -28,8 +28,8 @@
     "node": ">=18"
   },
   "dependencies": {
-    "marked": "^11.1.0",
-    "nodemailer": "^7.0.7",
+    "marked": "^17.0.3",
+    "nodemailer": "^7.0.11",
     "promise-toolbox": "^0.21.0"
   },
   "devDependencies": {
