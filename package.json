@@ -31,7 +31,7 @@
     "exec-promise": "^0.7.0",
     "getopts": "^2.3.0",
     "globby": "^13.1.1",
-    "handlebars": "^4.7.6",
+    "handlebars": "^4.7.9",
     "husky": "^8.0.2",
     "lint-staged": "^15.0.2",
     "lodash": "^4.17.4",
