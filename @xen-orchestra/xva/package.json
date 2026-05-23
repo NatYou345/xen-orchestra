@@ -21,7 +21,7 @@
     "lodash.defaultsdeep": "^4.6.1",
     "promise-toolbox": "^0.21.0",
     "tar-stream": "^3.1.6",
-    "uuid": "^9.0.0"
+    "uuid": "^14.0.0"
   },
   "scripts": {
     "postversion": "npm publish --access public"
